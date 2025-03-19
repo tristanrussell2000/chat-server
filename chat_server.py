@@ -11,7 +11,6 @@ def get_next_packet(s):
     global buffers
     if s not in buffers.keys():
         buffers[s] = b''
-    print("getting next")
     while True:
         buffer = buffers[s]
         print(buffer)
@@ -59,6 +58,21 @@ def make_message_packet(nick, message):
     }
     return object_to_packet(message_object)
 
+def make_dm_packet(nick, message):
+    message_object = {
+            "type": "dm",
+            "nick": nick,
+            "message": message
+    }
+    return object_to_packet(message_object)
+
+def make_dm_error_packet(nick):
+    message_object = {
+            "type": "dm_error",
+            "message": f"nick: {nick} was not found"
+    }
+    return object_to_packet(message_object)
+
 def send_all(packet):
     global buffers
     socks = buffers.keys()
@@ -96,7 +110,6 @@ def main(argv):
                 client_socks.add(new_sock)
             else:
                 pack = get_next_packet(sock)
-                print("pack ", pack)
                 if pack == None:
                     client_socks.remove(sock)
                     buffers.pop(sock)
@@ -108,22 +121,27 @@ def main(argv):
                 
                 message = packet_to_object(pack)
                 t = message["type"]
-                print("ahhhh")
-                print(message)
-                print(t)
                 if t == "hello":
-                    print("got hello")
                     nick = message["nick"]
                     buffers[sock] = b''
                     nicks[sock] = nick
                     to_send = make_join_packet(nick)
                     send_all(to_send)
                 elif t == "chat":
-                    print("got chat")
                     nick = nicks[sock]
                     m = message["message"]
                     to_send = make_message_packet(nick, m)
                     send_all(to_send)
+                elif t == "dm":
+                    nick_from = nicks[sock]
+                    nick_to = message["nick"]
+                    # Might be more than one with same nickname
+                    socks_to = [k for k, v in nicks.items() if v == nick_to]
+                    p = make_dm_packet(nick_from, message["message"])
+                    if len(socks_to) == 0:
+                        sock.sendall(make_dm_error_packet(nick_to))
+                    for sock in socks_to:
+                        sock.sendall(p)
 
 
 if __name__ == "__main__":

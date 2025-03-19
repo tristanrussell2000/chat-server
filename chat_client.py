@@ -6,6 +6,7 @@ import socket
 from chatui import init_windows, read_command, print_message, end_windows
 
 buffer = b''
+my_name = ''
 
 def get_next_packet(s):
     global buffer
@@ -39,12 +40,19 @@ def receiving_function(s):
         if message_packet == None:
             break
         message = packet_to_object(message_packet)
-        nick = message["nick"]
         t = message["type"]
         if t == "chat":
+            nick = message["nick"]
             m = message["message"]
             print_message(f"{nick}: {m}")
+        elif t == "dm":
+            nick = message["nick"]
+            m = message["message"]
+            print_message(f"{nick} -> {my_name}: {m}")
+        elif t == "dm_error":
+            print_message(f"Error: {message['message']}")
         else:
+            nick = message["nick"]
             verb = "joined" if t == "join" else "left"
             print_message(f"*** {nick} has {verb} the chat")
 
@@ -63,6 +71,9 @@ def send_message(s, nick, t, message=""):
 def usage():
     print("usage: chat_client.py nickname server port", file=sys.stderr)
 
+def dm_usage():
+    print_message("usage: /message nickname message")
+
 def main(argv):
     try:
         nick = argv[1]
@@ -71,6 +82,9 @@ def main(argv):
     except:
         usage()
         return 1
+
+    global my_name
+    my_name = nick
 
     init_windows()
 
@@ -92,6 +106,15 @@ def main(argv):
         if command[:1] == "/":
             if command[1:2] == "q":
                 break;
+            if command[1:8] == "message":
+                rest = command[8:].strip().split(" ", 1)
+                if len(rest) != 2: 
+                    dm_usage()
+                    continue
+                nick_to = rest[0]
+                mess = rest[1]
+                send_message(s, nick_to, "dm", mess)
+                continue
         send_message(s, nick, "chat", command)
 
     end_windows()
